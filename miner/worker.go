@@ -838,6 +838,10 @@ func (w *worker) updateSnapshot(env *environment) {
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
+	//拦截所有执行交易结果
+	//for _, receipt := range env.receipts {
+	//
+	//}
 	w.snapshotReceipts = copyReceipts(env.receipts)
 	w.snapshotState = env.state.Copy()
 }

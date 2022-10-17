@@ -52,10 +52,10 @@ const (
 	PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription
+	//PendingFullTransactionsSubscription queries tx for pending
+	FullPendingTransactionsSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
-	//PendingTransactionsSubscription queries tx for pending
-	FullPendingTransactionsSubscription
 )
 
 const (
@@ -368,15 +368,18 @@ func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLog
 
 func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) {
 	hashes := make([]common.Hash, 0, len(ev.Txs))
+	txs := make([]*types.Transaction, 0, len(ev.Txs))
 	for _, tx := range ev.Txs {
 		hashes = append(hashes, tx.Hash())
+		txs = append(txs, tx)
 	}
+
 	for _, f := range filters[PendingTransactionsSubscription] {
 		f.hashes <- hashes
 	}
 
 	for _, f := range filters[FullPendingTransactionsSubscription] {
-		f.txs <- ev.Txs
+		f.txs <- txs
 	}
 }
 
@@ -480,7 +483,7 @@ func (es *EventSystem) eventLoop() {
 	}()
 
 	index := make(filterIndex)
-	for i := UnknownSubscription; i < FullPendingTransactionsSubscription; i++ {
+	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
