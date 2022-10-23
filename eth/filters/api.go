@@ -209,6 +209,37 @@ func (api *PublicFilterAPI) NewPendingFullTransactions(ctx context.Context) (*rp
 	return rpcSub, nil
 }
 
+// NewPendingTransactionsReceipt creates a subscription that is triggered each time a transaction
+// 监听制定hash交易在交易池中 执行状态的变化，如果模拟回合中未发现对应的hash，则返回空提示
+func (api *PublicFilterAPI) NewPendingTransactionsReceipt(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	gopool.Submit(func() {
+		receipts := make(chan []*types.Receipt, 128)
+		pendingReceipt := api.events.SubscribePendingReceipt(receipts, ethereum.FilterQuery(crit))
+		for {
+			select {
+			case rcpts := <-receipts:
+				//返回一次性监听到的执行结果数组
+				notifier.Notify(rpcSub.ID, rcpts)
+			case <-rpcSub.Err():
+				pendingReceipt.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				pendingReceipt.Unsubscribe()
+				return
+			}
+		}
+	})
+
+	return rpcSub, nil
+}
+
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 //

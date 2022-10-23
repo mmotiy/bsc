@@ -54,6 +54,8 @@ const (
 	BlocksSubscription
 	//PendingFullTransactionsSubscription queries tx for pending
 	FullPendingTransactionsSubscription
+	//PendingReceiptSubscription 订阅交易池中的交易执行结果，每次的模拟都进行返回
+	PendingReceiptSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription
 )
@@ -68,6 +70,8 @@ const (
 	logsChanSize = 10
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
+
+	receiptChanSize = 10
 )
 
 type subscription struct {
@@ -78,6 +82,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan []common.Hash
 	txs       chan []*types.Transaction
+	receipts  chan []*types.Receipt
 	headers   chan *types.Header
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
@@ -96,6 +101,7 @@ type EventSystem struct {
 	rmLogsSub      event.Subscription // Subscription for removed log event
 	pendingLogsSub event.Subscription // Subscription for pending log event
 	chainSub       event.Subscription // Subscription for new chain event
+	receiptSub     event.Subscription
 
 	// Channels
 	install       chan *subscription         // install filter for event notification
@@ -105,6 +111,7 @@ type EventSystem struct {
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
+	receiptCh     chan core.NewTxReceiptEvent
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -124,6 +131,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
 		chainCh:       make(chan core.ChainEvent, chainEvChanSize),
+		receiptCh:     make(chan core.NewTxReceiptEvent, receiptChanSize),
 	}
 
 	// Subscribe events
@@ -132,9 +140,10 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
+	m.receiptSub = m.backend.SubscribeReceiptEvent(m.receiptCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
+	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil || m.receiptSub == nil {
 		log.Crit("Subscribe for event system failed")
 	}
 
@@ -171,6 +180,7 @@ func (sub *Subscription) Unsubscribe() {
 			case <-sub.f.txs:
 			case <-sub.f.hashes:
 			case <-sub.f.headers:
+			case <-sub.f.receipts:
 			}
 		}
 
@@ -241,6 +251,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit ethereum.FilterQuery, logs
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
+		receipts:  make(chan []*types.Receipt),
 	}
 	return es.subscribe(sub)
 }
@@ -259,6 +270,7 @@ func (es *EventSystem) subscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
+		receipts:  make(chan []*types.Receipt),
 	}
 	return es.subscribe(sub)
 }
@@ -277,6 +289,7 @@ func (es *EventSystem) subscribePendingLogs(crit ethereum.FilterQuery, logs chan
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
+		receipts:  make(chan []*types.Receipt),
 	}
 	return es.subscribe(sub)
 }
@@ -294,6 +307,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		headers:   headers,
 		installed: make(chan struct{}),
 		err:       make(chan error),
+		receipts:  make(chan []*types.Receipt),
 	}
 	return es.subscribe(sub)
 }
@@ -307,9 +321,11 @@ func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscript
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		hashes:    hashes,
+		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
+		receipts:  make(chan []*types.Receipt),
 	}
 	return es.subscribe(sub)
 }
@@ -323,10 +339,30 @@ func (es *EventSystem) SubscribeFullPendingTxs(txs chan []*types.Transaction) *S
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
-		txs:       txs,
+		txs:       make(chan []*types.Transaction),
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
+		receipts:  make(chan []*types.Receipt),
+	}
+	return es.subscribe(sub)
+}
+
+// SubscribeFullPendingTxs creates a subscription that writes transaction hashes for
+//订阅pending交易池中对应交易的执行状态
+func (es *EventSystem) SubscribePendingReceipt(receipts chan []*types.Receipt, cri ethereum.FilterQuery) *Subscription {
+	sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       PendingReceiptSubscription,
+		created:   time.Now(),
+		logs:      make(chan []*types.Log),
+		hashes:    make(chan []common.Hash),
+		txs:       make(chan []*types.Transaction),
+		headers:   make(chan *types.Header),
+		installed: make(chan struct{}),
+		err:       make(chan error),
+		logsCrit:  cri,
+		receipts:  receipts,
 	}
 	return es.subscribe(sub)
 }
@@ -380,6 +416,22 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 
 	for _, f := range filters[FullPendingTransactionsSubscription] {
 		f.txs <- txs
+	}
+}
+
+//fixme handleReceipt 过滤需要知道的执行状态并通过rpc返回给 前端
+func (es *EventSystem) handleReceipt(filters filterIndex, ev core.NewTxReceiptEvent) {
+
+	retMap := make(map[common.Hash]*types.Receipt, len(ev.Receipts))
+
+	for _, receipt := range ev.Receipts {
+		retMap[receipt.TxHash] = receipt
+	}
+	//fixme 过滤执行结果
+	for _, f := range filters[PendingReceiptSubscription] {
+		if receipts := filterReceipts(retMap, f.logsCrit.WatchHashes); receipts != nil {
+			f.receipts <- receipts
+		}
 	}
 }
 
@@ -480,6 +532,7 @@ func (es *EventSystem) eventLoop() {
 		es.rmLogsSub.Unsubscribe()
 		es.pendingLogsSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
+		es.receiptSub.Unsubscribe()
 	}()
 
 	index := make(filterIndex)
@@ -499,7 +552,8 @@ func (es *EventSystem) eventLoop() {
 			es.handlePendingLogs(index, ev)
 		case ev := <-es.chainCh:
 			es.handleChainEvent(index, ev)
-
+		case ev := <-es.receiptCh:
+			es.handleReceipt(index, ev)
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
 				// the type are logs and pending logs subscriptions

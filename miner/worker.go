@@ -188,6 +188,8 @@ type worker struct {
 
 	// Feeds
 	pendingLogsFeed event.Feed
+	// Receipts
+	pendingReceipts event.Feed
 
 	// Subscriptions
 	mux          *event.TypeMux
@@ -619,6 +621,8 @@ func (w *worker) mainLoop() {
 				// to the pending block
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
+					//快照发生变化，发送事件
+					w.pendingReceipts.Send(w.current.receipts)
 				}
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
@@ -874,7 +878,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	var coalescedLogs []*types.Log
 	var stopTimer *time.Timer
 	delay := w.engine.Delay(w.chain, env.header)
-	if delay != nil {
+	if delay != nil && false {
 		stopTimer = time.NewTimer(*delay - w.config.DelayLeftOver)
 		log.Debug("Time left for mining work", "left", (*delay - w.config.DelayLeftOver).String(), "leftover", w.config.DelayLeftOver)
 		defer stopTimer.Stop()

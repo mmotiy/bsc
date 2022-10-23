@@ -269,3 +269,8 @@ func (miner *Miner) GetSealingBlock(parent common.Hash, timestamp uint64, coinba
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
 }
+
+// SubscribeReceipt 发送交易的执行结果与日志信息
+func (miner *Miner) SubscribeReceipt(ch chan<- core.NewTxReceiptEvent) event.Subscription {
+	return miner.worker.pendingReceipts.Subscribe(ch)
+}

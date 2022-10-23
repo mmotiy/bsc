@@ -254,6 +254,14 @@ func (b *LesApiBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.
 	})
 }
 
+//新增light mode 监听结果执行方法
+func (b *LesApiBackend) SubscribeReceiptEvent(ch chan<- core.NewTxReceiptEvent) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
 func (b *LesApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.blockchain.SubscribeRemovedLogsEvent(ch)
 }

@@ -235,6 +235,10 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 	return b.eth.BlockChain().SubscribeLogsEvent(ch)
 }
 
+func (b *EthAPIBackend) SubscribeReceiptEvent(ch chan<- core.NewTxReceiptEvent) event.Subscription {
+	return b.eth.miner.SubscribeReceipt(ch)
+}
+
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.AddLocal(signedTx)
 }
