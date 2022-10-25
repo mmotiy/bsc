@@ -177,7 +177,7 @@ func (sub *Subscription) Unsubscribe() {
 			case sub.es.uninstall <- sub.f:
 				break uninstallLoop
 			case <-sub.f.logs:
-			case <-sub.f.txs:
+			case <-sub.f.txs: //最新版本代码取消了
 			case <-sub.f.hashes:
 			case <-sub.f.headers:
 			case <-sub.f.receipts:

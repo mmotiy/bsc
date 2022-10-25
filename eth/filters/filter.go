@@ -45,7 +45,7 @@ type Backend interface {
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
-	SubscribeReceiptEvent(ch chan<- core.NewTxReceiptEvent) event.Subscription
+
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }
@@ -308,7 +308,7 @@ Logs:
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
 		if len(topics) > len(log.Topics) {
-			continue Logs
+			continue
 		}
 		for i, sub := range topics {
 			match := len(sub) == 0 // empty rule set == wildcard
@@ -324,17 +324,6 @@ Logs:
 		}
 		ret = append(ret, log)
 	}
-	return ret
-}
-
-// filterReceipts creates a slice of receipts matching the given criteria.
-func filterReceipts(retMap map[common.Hash]*types.Receipt, hashes []common.Hash) []*types.Receipt {
-	ret := make([]*types.Receipt, len(hashes))
-
-	for i, hash := range hashes {
-		ret[i] = retMap[hash]
-	}
-
 	return ret
 }
 
