@@ -429,7 +429,7 @@ func (es *EventSystem) handleReceipt(filters filterIndex, ev core.NewTxReceiptEv
 	}
 	//fixme 过滤执行结果
 	for _, f := range filters[PendingReceiptSubscription] {
-		if receipts := filterReceipts(retMap, f.logsCrit.WatchHashes); receipts != nil {
+		if receipts := es.filterReceipts(retMap, f.logsCrit.WatchHashes); receipts != nil {
 			f.receipts <- receipts
 		}
 	}
@@ -521,6 +521,14 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 		return logs
 	}
 	return nil
+}
+
+func (es *EventSystem) filterReceipts(retMap map[common.Hash]*types.Receipt, watchHashes []common.Hash) []*types.Receipt {
+	receipts := make([]*types.Receipt, len(watchHashes))
+	for i := 0; i < len(watchHashes); i++ {
+		receipts[i] = retMap[watchHashes[i]]
+	}
+	return receipts
 }
 
 // eventLoop (un)installs filters and processes mux events.

@@ -878,6 +878,13 @@ func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 	return nullSubscription()
 }
 
+func (fb *filterBackend) SubscribeReceiptEvent(ch chan<- core.NewTxReceiptEvent) event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
