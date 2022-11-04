@@ -610,6 +610,7 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current sealing block. These transactions will
 			// be automatically eliminated.
+			log.Info("txsCh:", len(ev.Txs), "w.isRunning", w.isRunning(), "w.current", w.current != nil)
 			if !w.isRunning() && w.current != nil {
 				start := time.Now()
 				// If block is already full, abort
@@ -631,6 +632,7 @@ func (w *worker) mainLoop() {
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 					//快照发生变化，发送事件
+					log.Info("快照已变更", time.Now())
 					w.pendingReceipts.Send(w.current.receipts)
 				}
 			} else {
@@ -886,7 +888,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	var coalescedLogs []*types.Log
 	var stopTimer *time.Timer
 	delay := w.engine.Delay(w.chain, env.header)
-	if delay != nil && false {
+	if delay != nil {
 		stopTimer = time.NewTimer(*delay - w.config.DelayLeftOver)
 		log.Debug("Time left for mining work", "left", (*delay - w.config.DelayLeftOver).String(), "leftover", w.config.DelayLeftOver)
 		defer stopTimer.Stop()

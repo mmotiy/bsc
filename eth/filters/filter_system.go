@@ -339,7 +339,7 @@ func (es *EventSystem) SubscribeFullPendingTxs(txs chan []*types.Transaction) *S
 		created:   time.Now(),
 		logs:      make(chan []*types.Log),
 		hashes:    make(chan []common.Hash),
-		txs:       make(chan []*types.Transaction),
+		txs:       txs,
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
 		err:       make(chan error),
