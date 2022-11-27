@@ -632,10 +632,10 @@ func (w *worker) mainLoop() {
 				if tcount != w.current.tcount {
 					w.updateSnapshot(w.current)
 					//快照发生变化，发送事件
-					log.Info("快照已变更", "time", time.Now())
-					w.pendingReceipts.Send(core.NewTxReceiptEvent{
-						Receipts: copyReceipts(w.current.receipts),
-					})
+					//log.Info("快照已变更", "time", time.Now())
+					//w.pendingReceipts.Send(core.NewTxReceiptEvent{
+					//	Receipts: copyReceipts(w.current.receipts),
+					//})
 				}
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
@@ -992,6 +992,8 @@ LOOP:
 		}
 	}
 	bloomProcessors.Close()
+
+	log.Info("commitTrans____", "coinbase", w.current.coinbase, "tCount", w.current.tcount, "txHash", w.current.header.TxHash, "etherbase", w.config.Etherbase)
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
