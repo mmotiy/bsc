@@ -610,7 +610,10 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current sealing block. These transactions will
 			// be automatically eliminated.
-			log.Info("tttt___", "txsCh:", len(ev.Txs), "w.isRunning", w.isRunning(), "w.current", w.current != nil, "Parlia.Period", w.chainConfig.Parlia.Period, "coinbase", w.current.coinbase, "number", w.current.header.Number)
+			log.Info("tttt___", "txsCh:", len(ev.Txs), "w.isRunning", w.isRunning(), "w.current", w.current != nil, "Parlia.Period", w.chainConfig.Parlia.Period)
+			if w.current != nil {
+				log.Info("current____", "coinbase", w.current.coinbase, "number", w.current.header.Number)
+			}
 			if !w.isRunning() && w.current != nil {
 				start := time.Now()
 				// If block is already full, abort
