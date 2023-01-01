@@ -201,6 +201,7 @@ type worker struct {
 	// Subscriptions
 	mux          *event.TypeMux
 	txsCh        chan core.NewTxsEvent
+	txsChange    chan struct{}
 	txsSub       event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
 	chainHeadSub event.Subscription
@@ -272,6 +273,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
+		txsChange:          make(chan struct{}, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
@@ -296,12 +298,12 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		recommit = minRecommitInterval
 	}
 
-	worker.wg.Add(4)
+	worker.wg.Add(5)
 	go worker.mainLoop()
 	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
-
+	go worker.txsChangeLoop()
 	// Submit first work to initialize pending state.
 	if init {
 		worker.startCh <- struct{}{}
@@ -610,10 +612,10 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current sealing block. These transactions will
 			// be automatically eliminated.
-			log.Info("tttt___", "txsCh:", len(ev.Txs), "w.isRunning", w.isRunning(), "w.current", w.current != nil, "Parlia.Period", w.chainConfig.Parlia.Period)
-			if w.current != nil {
-				log.Info("current____", "coinbase", w.current.coinbase, "number", w.current.header.Number)
-			}
+			//log.Info("tttt___", "txsCh:", len(ev.Txs), "w.isRunning", w.isRunning(), "w.current", w.current != nil, "Parlia.Period", w.chainConfig.Parlia.Period)
+			//if w.current != nil {
+			//	log.Info("current____", "coinbase", w.current.coinbase, "number", w.current.header.Number)
+			//}
 			if !w.isRunning() && w.current != nil {
 				start := time.Now()
 				// If block is already full, abort
@@ -789,6 +791,22 @@ func (w *worker) resultLoop() {
 		case <-w.exitCh:
 			return
 		}
+	}
+}
+
+//一旦有新交易直接 提交当前的模拟数据
+func (w *worker) txsChangeLoop() {
+	defer w.wg.Done()
+
+	for {
+		select {
+		case <-w.txsChange:
+			w.commitWork(nil, true, time.Now().Unix())
+			log.Info("changeLoop", "coinbase", w.current.coinbase)
+		case <-w.exitCh:
+			return
+		}
+
 	}
 }
 
@@ -995,8 +1013,10 @@ LOOP:
 		}
 	}
 	bloomProcessors.Close()
-
-	log.Info("commitTrans____", "coinbase", w.current.coinbase, "tCount", w.current.tcount, "txHash", w.current.header.TxHash, "etherbase", w.config.Etherbase)
+	if w.current != nil {
+		var froLogs = []interface{}{"coinbase", w.current.coinbase, "tCount", w.current.tcount, "txHash", w.current.header.TxHash, "etherbase", w.config.Etherbase}
+		log.Info("commitTrans____", froLogs...)
+	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
 		// when we are sealing, the worker will regenerate a sealing block every 3 seconds.
